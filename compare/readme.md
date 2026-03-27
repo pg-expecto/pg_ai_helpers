@@ -1,6 +1,3 @@
-Вот файл `README.md` для скрипта `compare.sh`. Он оформлен на русском и английском языках, включает подробное описание, примеры использования и указание лицензии MIT. Такой файл можно разместить в папке `compare/` репозитория `pg_ai_helpers`.
-
-```markdown
 # compare.sh – Configuration file comparison tool
 
 ---
@@ -150,4 +147,3 @@ See the [LICENSE](../LICENSE) file for details.
 
 Данный проект распространяется под лицензией **MIT**.  
 Подробности см. в файле [LICENSE](../LICENSE).
-```
