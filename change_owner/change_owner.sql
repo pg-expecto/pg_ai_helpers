@@ -17,75 +17,63 @@
 -- Подключаемся к целевой базе данных
 \connect :dbname
 
--- Формируем динамический блок DO с подстановкой имени роли
-SELECT format(
-    $do$
-    do $$
-    declare
-        new_owner text := %L;
-        object_type record;
-        r record;
-        sql text;
-    begin
-        -- Смена владельца для несистемных схем
-        for r in 
-            select nspname 
-            from pg_namespace 
-            where nspname not in ('pg_catalog', 'pg_toast', 'information_schema', 'public')
-              and nspname not like 'pg_%%'
-        loop
-            execute format('alter schema %I owner to %I', r.nspname, new_owner);
-        end loop;
+-- Формируем динамический DO блок с подстановкой new_owner
+SELECT format('
+do $$
+declare
+    new_owner text := %L;
+    object_type record;
+    r record;
+    sql text;
+begin
+    -- Смена владельца для несистемных схем
+    for r in 
+        select nspname 
+        from pg_namespace 
+        where nspname not in (''pg_catalog'', ''pg_toast'', ''information_schema'', ''public'')
+          and nspname not like ''pg_%%''
+    loop
+        execute ''alter schema '' || quote_ident(r.nspname) || '' owner to '' || quote_ident(new_owner);
+    end loop;
 
-        -- Смена владельца для таблиц, представлений, материализованных представлений и последовательностей
-        for object_type in
-            select
-                unnest('{type,table,table,view,materialized view,sequence}'::text[]) type_name,
-                unnest('{c,p,r,v,m,S}'::text[]) code
+    -- Смена владельца для таблиц, представлений, материализованных представлений и последовательностей
+    for object_type in
+        select
+            unnest(''{type,table,table,view,materialized view,sequence}''::text[]) type_name,
+            unnest(''{c,p,r,v,m,S}''::text[]) code
+    loop
+        for r in
+            execute ''select n.nspname, c.relname
+                     from pg_class c
+                     join pg_namespace n on n.oid = c.relnamespace
+                     where n.nspname not in (''''pg_catalog'''', ''''information_schema'''')
+                       and c.relkind = '' || quote_literal(object_type.code) || ''
+                     order by c.relname''
         loop
-            for r in
-                execute format(
-                    $sql$
-                        select n.nspname, c.relname
-                        from pg_class c
-                        join pg_namespace n on n.oid = c.relnamespace
-                        where n.nspname not in ('pg_catalog', 'information_schema')
-                          and c.relkind = %L
-                        order by c.relname
-                    $sql$,
-                    object_type.code
-                )
-            loop
-                sql := format(
-                    'alter %s %I.%I owner to %I;',
-                    object_type.type_name, r.nspname, r.relname, new_owner
-                );
-                execute sql;
-            end loop;
+            execute ''alter '' || object_type.type_name || '' '' || quote_ident(r.nspname) || ''.'' || quote_ident(r.relname) || '' owner to '' || quote_ident(new_owner);
         end loop;
+    end loop;
 
-        -- Смена владельца для функций и процедур
-        for r in 
-            select
-                p.proname,
-                n.nspname,
-                pg_catalog.pg_get_function_identity_arguments(p.oid) as args
-            from pg_catalog.pg_namespace n
-            join pg_catalog.pg_proc p on p.pronamespace = n.oid
-            where n.nspname not in ('pg_catalog', 'information_schema')
-              and p.proname not ilike 'dblink%%'
-        loop
-            sql := format(
-                'alter function %I.%I(%s) owner to %I',
-                r.nspname, r.proname, r.args, new_owner
-            );
-            execute sql;
-        end loop;
-    end
-    $$;
-    $do$,
-    :'new_owner'
-) AS cmd \gset
+    -- Смена владельца для функций и процедур
+    for r in 
+        select
+            p.proname,
+            n.nspname,
+            pg_catalog.pg_get_function_identity_arguments(p.oid) as args,
+            p.prokind
+        from pg_catalog.pg_namespace n
+        join pg_catalog.pg_proc p on p.pronamespace = n.oid
+        where n.nspname not in (''pg_catalog'', ''information_schema'')
+          and p.proname not ilike ''dblink%%''
+    loop
+        if r.prokind = ''f'' then
+            execute ''alter function '' || quote_ident(r.nspname) || ''.'' || quote_ident(r.proname) || ''('' || r.args || '') owner to '' || quote_ident(new_owner);
+        elsif r.prokind = ''p'' then
+            execute ''alter procedure '' || quote_ident(r.nspname) || ''.'' || quote_ident(r.proname) || ''('' || r.args || '') owner to '' || quote_ident(new_owner);
+        end if;
+    end loop;
+end;
+$$;', :'new_owner') AS cmd \gset
 
 -- Выполняем сформированный блок
 :cmd
