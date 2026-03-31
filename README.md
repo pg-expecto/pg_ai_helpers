@@ -12,9 +12,10 @@ This repository contains helper scripts created with the assistance of AI. They 
 
 | Script | Description |
 |--------|-------------|
-| [`compare/compare.sh`](./compare/compare.sh) | Compare PostgreSQL configuration files (key = value format). |
-| [`mask_pgpro_pwr/mask_pgpro_pwr.sh`](./mask_pgpro_pwr/mask_pgpro_pwr.sh) | Mask IP addresses, constants in SQL queries, and database names in pgpro_pwr reports. |
-| [`vacuum/vacuum`](./vacuum/vacuum) | Service scripts to manually run VACUUM on selected tables in the cluster. |
+| `compare/compare.sh` | Compare PostgreSQL configuration files (key = value format). |
+| `mask_pgpro_pwr/mask_pgpro_pwr.sh` | Mask IP addresses, constants in SQL queries, and database names in pgpro_pwr reports. |
+| `vacuum/vacuum` | Service scripts to manually run VACUUM on selected tables in the cluster. |
+| `change_owner/change_owner.sh` | Change ownership of database objects (tables, sequences, views, etc.) to a new role. |
 
 ---
 
@@ -26,16 +27,17 @@ This repository contains helper scripts created with the assistance of AI. They 
 
 | Скрипт | Описание |
 |--------|----------|
-| [`compare/compare.sh`](./compare/compare.sh) | Сравнение конфигурационных файлов СУБД (формат ключ = значение). |
-| [`mask_pgpro_pwr/mask_pgpro_pwr.sh`](./mask_pgpro_pwr/mask_pgpro_pwr.sh) | Маскирование IP, констант в SQL-запросах и имён баз данных в отчётах pgpro_pwr. |
-| [`vacuum/vacuum`](./vacuum/vacuum) | Сервисные скрипты для ручного выполнения VACUUM для отдельных таблиц в кластере. |
+| `compare/compare.sh` | Сравнение конфигурационных файлов СУБД (формат ключ = значение). |
+| `mask_pgpro_pwr/mask_pgpro_pwr.sh` | Маскирование IP, констант в SQL-запросах и имён баз данных в отчётах pgpro_pwr. |
+| `vacuum/vacuum` | Сервисные скрипты для ручного выполнения VACUUM для отдельных таблиц в кластере. |
+| `change_owner/change_owner.sh` | Смена владельца объектов базы данных (таблиц, последовательностей, представлений и т.д.) на новую роль. |
 
 ---
 
 ## License
 
 This project is distributed under the **MIT License**.  
-See the [LICENSE](LICENSE) file for details.
+See the LICENSE file for details.
 
 ---
 
