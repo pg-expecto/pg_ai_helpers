@@ -71,6 +71,15 @@ psql -U admin -h localhost -v dbname=production_db -v new_owner=app_owner -f cha
 ```
 Смена владельца успешно завершена.
 ```
+---
+
+## License / Лицензия
+
+This project is distributed under the **MIT License**.  
+See the [LICENSE](../LICENSE) file for details.
+
+Данный проект распространяется под лицензией **MIT**.  
+Подробности см. в файле [LICENSE](../LICENSE).
 
 По вопросам, связанным со скриптом, обращайтесь к администратору вашей базы данных или к разработчику, предоставившему данный инструмент.
 ```
