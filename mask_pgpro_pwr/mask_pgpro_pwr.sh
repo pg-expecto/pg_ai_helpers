@@ -19,13 +19,19 @@ if [ ! -f "$INPUT" ]; then
     exit 1
 fi
 
-# 1. Формирование списка баз данных через psql
-DB_LIST_FILE="db.txt"
+# Проверка наличия необходимых утилит
 if ! command -v psql &>/dev/null; then
     echo "Error: psql not found. Cannot retrieve database list." >&2
     exit 1
 fi
 
+if ! command -v awk &>/dev/null; then
+    echo "Error: awk not found. Required for text processing." >&2
+    exit 1
+fi
+
+# 1. Формирование списка баз данных через psql
+DB_LIST_FILE="db.txt"
 if ! psql -Aqtc 'SELECT datname FROM pg_database' > "$DB_LIST_FILE" 2>/dev/null; then
     echo "Error: Failed to execute psql command. Check connection and permissions." >&2
     exit 1
@@ -52,7 +58,7 @@ else
     USER_LIST_FILE=""
 fi
 
-# 3. Замена названий баз данных на DB-N (используется awk)
+# 3. Замена названий баз данных на DB-N
 replace_db_names() {
     local input_file="$1"
     local output_file="$2"
@@ -110,31 +116,61 @@ replace_user_names() {
     }' "$input_file" > "$output_file"
 }
 
-# Временные файлы
-TMP1=$(mktemp)
-TMP2=$(mktemp)
-TMP3=$(mktemp)
-trap "rm -f $TMP1 $TMP2 $TMP3" EXIT
-
-# Последовательная обработка: базы данных -> пользователи -> IP -> SQL
-replace_db_names "$INPUT" "$TMP1" "$DB_LIST_FILE"
-
-if [ -n "$USER_LIST_FILE" ] && [ -s "$USER_LIST_FILE" ]; then
-    replace_user_names "$TMP1" "$TMP2" "$USER_LIST_FILE"
-else
-    cp "$TMP1" "$TMP2"
-fi
-
-# 5. Маскировка IP-адресов
+# 5. Маскировка IPv4-адресов (только локальные, валидные, без привязки к границам слов)
 mask_ip() {
-    sed -E \
-        -e 's/\b([0-9]{1,3}\.){3}[0-9]{1,3}\b/ip/g' \
-        -e 's/\b([0-9a-fA-F]{1,4}:){1,7}[0-9a-fA-F]{1,4}\b/ip/g' \
-        -e 's/\b::([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}\b/ip/g' \
-        "$1"
-}
+    awk '
+    function is_local_ip(ip,   arr, i, val, o1, o2) {
+        # Проверяем, что IP состоит только из цифр и точек
+        if (ip ~ /[^0-9.]/) return 0
+        split(ip, arr, ".")
+        if (length(arr) != 4) return 0
+        for (i = 1; i <= 4; i++) {
+            val = arr[i]
+            # Удаляем ведущие нули для числовой проверки
+            sub(/^0+/, "", val)
+            if (val == "") val = 0
+            if (val > 255) return 0
+        }
+        o1 = arr[1] + 0
+        o2 = arr[2] + 0
+        if (o1 == 10) return 1
+        if (o1 == 172 && o2 >= 16 && o2 <= 31) return 1
+        if (o1 == 192 && o2 == 168) return 1
+        return 0
+    }
 
-mask_ip "$TMP2" > "$TMP3"
+    {
+        line = $0
+        newline = ""
+        while (match(line, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
+            start = RSTART
+            len = RLENGTH
+            ip = substr(line, start, len)
+
+            # Символы до и после совпадения
+            before = (start > 1) ? substr(line, start-1, 1) : ""
+            after = (start+len <= length(line)) ? substr(line, start+len, 1) : ""
+
+            # Если рядом цифра или точка — это не отдельный IP (например, часть длинного числа)
+            if (before ~ /[0-9.]/ || after ~ /[0-9.]/) {
+                newline = newline substr(line, 1, start+len-1)
+                line = substr(line, start+len)
+                continue
+            }
+
+            if (is_local_ip(ip)) {
+                replacement = "ip"
+            } else {
+                replacement = ip
+            }
+
+            newline = newline substr(line, 1, start-1) replacement
+            line = substr(line, start+len)
+        }
+        newline = newline line
+        print newline
+    }' "$1"
+}
 
 # 6. Маскировка SQL-литералов
 mask_sql_literals() {
@@ -148,15 +184,29 @@ mask_sql_literals() {
     }
     {
         if (in_sql) {
-            # Строковые литералы (с учётом удвоенных кавычек)
             gsub(/\047(\047\047|[^\047])*\047/, "\047?\047")
-            # Числовые литералы
             gsub(/\b[0-9]+(\.[0-9]+)?\b/, "?")
         }
         print
     }' "$1"
 }
 
+# Временные файлы
+TMP1=$(mktemp)
+TMP2=$(mktemp)
+TMP3=$(mktemp)
+trap "rm -f $TMP1 $TMP2 $TMP3" EXIT
+
+# Последовательная обработка
+replace_db_names "$INPUT" "$TMP1" "$DB_LIST_FILE"
+
+if [ -n "$USER_LIST_FILE" ] && [ -s "$USER_LIST_FILE" ]; then
+    replace_user_names "$TMP1" "$TMP2" "$USER_LIST_FILE"
+else
+    cp "$TMP1" "$TMP2"
+fi
+
+mask_ip "$TMP2" > "$TMP3"
 mask_sql_literals "$TMP3" > "$OUTPUT"
 
 echo "Masked report saved to $OUTPUT"
